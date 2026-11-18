@@ -1,0 +1,111 @@
+<?php $cf = $admin['cloudflare']; $message = $admin['message'] ?? null; ?>
+<div class="d-flex justify-content-between align-items-center py-3 mb-4">
+    <h4 class="mb-0">
+        <img src="/assets/services/osmium-cloudflare/logo.png" alt="" width="28" height="28" class="me-2 align-text-bottom">Cloudflare
+    </h4>
+    <button type="submit" form="settings-form" class="btn btn-primary">
+        <i class="bx bx-save me-1"></i> Save Settings
+    </button>
+</div>
+
+<?php if ($message): ?>
+    <div class="alert alert-<?= $message['ok'] ? 'success' : 'danger' ?> alert-dismissible fade show" role="alert">
+        <?= \htmlspecialchars((string) $message['text']) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<div class="row justify-content-center">
+    <div class="col-lg-4">
+        <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" id="settings-form">
+            <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+            <input type="hidden" name="action" value="save">
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0"><i class="bx bx-cloud me-2"></i>Settings</h5></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enabled" name="enabled" <?= $cf['enabled'] ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="enabled">Enabled</label>
+                        </div>
+                        <div class="form-text">When on, every change saved in the admin or by an assistant clears the site's cache (at most once every 15 seconds).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="api_token" class="form-label fw-semibold">API token</label>
+                        <input type="password" class="form-control" id="api_token" name="api_token" autocomplete="off"
+                            placeholder="<?= $cf['hasToken'] ? 'Leave blank to keep current' : '' ?>">
+                        <div class="form-text">Create it in Cloudflare under My Profile > API Tokens with the Zone > Cache Purge permission (add Zone Settings > Edit for development mode and Zone > Zone > Read for the status line). It is kept only in this site's config file.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="zone_id" class="form-label fw-semibold">Zone ID</label>
+                        <input type="text" class="form-control" id="zone_id" name="zone_id" value="<?= \htmlspecialchars($cf['zoneId']) ?>">
+                    </div>
+                    <div class="mb-0">
+                        <label for="hostnames" class="form-label fw-semibold">Hostnames</label>
+                        <textarea class="form-control" id="hostnames" name="hostnames" rows="3"><?= \htmlspecialchars($cf['hostnames']) ?></textarea>
+                        <div class="form-text">This site's hostnames, one per line, such as <code>www.example.com</code>. Staging and live can share a zone: each site lists only its own.</div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><i class="bx bx-info-circle me-2"></i>Status</h5></div>
+            <div class="card-body">
+                <?php if (!$cf['configured']): ?>
+                    <p class="text-muted mb-0">Not set up. Save the settings and switch Cloudflare on.</p>
+                <?php elseif (!$cf['zone']['ok']): ?>
+                    <p class="text-danger mb-0"><?= \htmlspecialchars($cf['zone']['error']) ?></p>
+                <?php else: ?>
+                    <p class="mb-1"><strong>Zone:</strong> <?= \htmlspecialchars($cf['zone']['name']) ?> (<?= \htmlspecialchars($cf['zone']['status']) ?>)</p>
+                    <p class="mb-0"><strong>Development mode:</strong> <?= $cf['zone']['devMode'] ? 'on (cache bypassed, turns itself off after 3 hours)' : 'off' ?></p>
+                <?php endif; ?>
+            </div>
+            <?php if ($cf['configured']): ?>
+                <div class="card-footer d-flex gap-2 flex-wrap">
+                    <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/">
+                        <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+                        <button class="btn btn-outline-secondary btn-sm" name="action" value="test">Test connection</button>
+                    </form>
+                    <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/">
+                        <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+                        <button class="btn btn-outline-secondary btn-sm" name="action" value="<?= ($cf['zone']['devMode'] ?? false) ? 'dev-off' : 'dev-on' ?>">
+                            Turn development mode <?= ($cf['zone']['devMode'] ?? false) ? 'off' : 'on' ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($cf['configured']): ?>
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><i class="bx bx-refresh me-2"></i>Clear the cache</h5></div>
+            <div class="card-body">
+                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" class="mb-3">
+                    <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+                    <input type="hidden" name="action" value="purge-site">
+                    <button class="btn btn-primary btn-sm">Clear this site</button>
+                    <div class="form-text">Every cached file on this site's hostnames.</div>
+                </form>
+                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" class="mb-3">
+                    <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+                    <input type="hidden" name="action" value="purge-urls">
+                    <textarea class="form-control mb-2" name="urls" rows="3" placeholder="Full URLs, one per line"></textarea>
+                    <button class="btn btn-outline-primary btn-sm">Clear these URLs</button>
+                </form>
+                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" id="purge-everything-form">
+                    <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
+                    <input type="hidden" name="action" value="purge-everything">
+                    <button class="btn btn-outline-danger btn-sm">Clear everything</button>
+                    <div class="form-text">The whole zone, including any other site that shares it.</div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<script src="/assets/services/osmium-cloudflare/cloudflare.js<?= $adminAssetVersion('/assets/services/osmium-cloudflare/cloudflare.js') ?>"></script>
