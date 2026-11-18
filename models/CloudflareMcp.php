@@ -50,7 +50,7 @@ class CloudflareMcp
         $purger = CloudflarePurger::fromSiteConfig();
         $result = match ($scope) {
             'site' => $purger->sendSite(),
-            'urls' => $purger->sendUrls(self::urls($arguments)),
+            'urls' => self::sendUrls($purger, self::urls($arguments)),
             'everything' => ($arguments['confirm_everything'] ?? false) === true
                 ? $purger->sendEverything()
                 : ['ok' => false, 'error' => 'Purging everything needs confirm_everything set to true'],
@@ -60,6 +60,15 @@ class CloudflareMcp
         if (!$result['ok']) throw new McpToolException($result['error']);
 
         return ['purged' => $scope, 'message' => 'Cloudflare cache cleared'];
+    }
+
+    /** @param string[] $urls @return array{ok: bool, error: string} */
+    private static function sendUrls(CloudflarePurger $purger, array $urls): array
+    {
+        $noneOnThisSite = $urls === [];
+        if ($noneOnThisSite) return ['ok' => false, 'error' => 'None of those URLs are on this site\'s hostnames, so nothing was cleared'];
+
+        return $purger->sendUrls($urls);
     }
 
     /** @param array<string, mixed> $arguments @return string[] only URLs on this site's hostnames */

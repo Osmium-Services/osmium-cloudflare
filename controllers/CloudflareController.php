@@ -84,7 +84,7 @@ class CloudflareController extends AdminController
         $result = match ($action) {
             'test' => $client->zone(),
             'purge-site' => $purger->sendSite(),
-            'purge-urls' => $purger->sendUrls($this->postedUrls($config)),
+            'purge-urls' => $this->purgeUrls($purger, $this->postedUrls($config)),
             'purge-everything' => $purger->sendEverything(),
             'dev-on' => $client->setDevelopmentMode(true),
             'dev-off' => $client->setDevelopmentMode(false),
@@ -96,6 +96,15 @@ class CloudflareController extends AdminController
         }
 
         return [$result['ok'], $result['ok'] ? \ucfirst($description) . ' done.' : $result['error']];
+    }
+
+    /** @param string[] $urls @return array{ok: bool, error: string} */
+    private function purgeUrls(CloudflarePurger $purger, array $urls): array
+    {
+        $noneOnThisSite = $urls === [];
+        if ($noneOnThisSite) return ['ok' => false, 'error' => 'None of those URLs are on this site\'s hostnames, so nothing was cleared.'];
+
+        return $purger->sendUrls($urls);
     }
 
     /** @return string[] URLs from the box, only on this site's hostnames */
