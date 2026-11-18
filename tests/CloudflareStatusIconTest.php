@@ -59,7 +59,7 @@ final class CloudflareStatusIconTest extends TestCase
         $this->assertSame('bx bx-cloud', $icon['icon']);
         $this->assertSame('success', $icon['color']);
         $this->assertFalse($icon['crossed']);
-        $this->assertSame('cloudflare/', $icon['path']);
+        $this->assertSame('settings/cloudflare/', $icon['path']);
     }
 
     public function testAmberCrossedCloudWhileDevelopmentModeIsOn(): void

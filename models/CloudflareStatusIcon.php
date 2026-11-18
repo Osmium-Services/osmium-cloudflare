@@ -30,7 +30,7 @@ class CloudflareStatusIcon
             'id' => 'cloudflare',
             'title' => $developmentMode ? 'Cloudflare development mode is on: the cache is bypassed' : 'Cloudflare cache purging is active',
             'icon' => 'bx bx-cloud',
-            'path' => 'cloudflare/',
+            'path' => 'settings/cloudflare/',
             'color' => $developmentMode ? 'warning' : 'success',
             'crossed' => $developmentMode,
         ];

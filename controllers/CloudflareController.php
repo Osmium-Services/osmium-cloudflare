@@ -14,7 +14,7 @@ use Osmium\Services\Cloudflare\Models\CloudflarePurger;
  * Cloudflare: settings, test connection, manual purges and development mode - a full-page form POST/redirect flow.
  *
  * Routes:
- *   - index() → /admin/cloudflare/  (GET shows the page; POST runs one action from the "action" field)
+ *   - index() → /admin/settings/cloudflare/  (GET shows the page; POST runs one action from the "action" field)
  */
 class CloudflareController extends AdminController
 {
@@ -166,6 +166,6 @@ class CloudflareController extends AdminController
     private function finish(bool $ok, string $text): void
     {
         $_SESSION['cloudflare_message'] = ['ok' => $ok, 'text' => $text];
-        $this->redirect('cloudflare/');
+        $this->redirect('settings/cloudflare/');
     }
 }

@@ -17,7 +17,7 @@
 
 <div class="row justify-content-center">
     <div class="col-lg-4">
-        <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" id="settings-form">
+        <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/" id="settings-form">
             <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
             <input type="hidden" name="action" value="save">
             <div class="card mb-4">
@@ -65,11 +65,11 @@
             </div>
             <?php if ($cf['configured']): ?>
                 <div class="card-footer d-flex gap-2 flex-wrap">
-                    <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/">
+                    <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/">
                         <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
                         <button class="btn btn-outline-secondary btn-sm" name="action" value="test">Test connection</button>
                     </form>
-                    <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/">
+                    <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/">
                         <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
                         <button class="btn btn-outline-secondary btn-sm" name="action" value="<?= ($cf['zone']['devMode'] ?? false) ? 'dev-off' : 'dev-on' ?>">
                             Turn development mode <?= ($cf['zone']['devMode'] ?? false) ? 'off' : 'on' ?>
@@ -85,19 +85,19 @@
         <div class="card mb-4">
             <div class="card-header"><h5 class="mb-0"><i class="bx bx-refresh me-2"></i>Clear the cache</h5></div>
             <div class="card-body">
-                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" class="mb-3">
+                <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/" class="mb-3">
                     <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
                     <input type="hidden" name="action" value="purge-site">
                     <button class="btn btn-primary btn-sm">Clear this site</button>
                     <div class="form-text">Every cached file on this site's hostnames.</div>
                 </form>
-                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" class="mb-3">
+                <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/" class="mb-3">
                     <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
                     <input type="hidden" name="action" value="purge-urls">
                     <textarea class="form-control mb-2" name="urls" rows="3" placeholder="Full URLs, one per line"></textarea>
                     <button class="btn btn-outline-primary btn-sm">Clear these URLs</button>
                 </form>
-                <form method="POST" action="<?= $admin['basePath'] ?>cloudflare/" id="purge-everything-form">
+                <form method="POST" action="<?= $admin['basePath'] ?>settings/cloudflare/" id="purge-everything-form">
                     <input type="hidden" name="token" value="<?= $template['formToken'] ?? '' ?>">
                     <input type="hidden" name="action" value="purge-everything">
                     <button class="btn btn-outline-danger btn-sm">Clear everything</button>
