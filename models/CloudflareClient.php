@@ -112,7 +112,8 @@ class CloudflareClient
             CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => $body === null ? null : \json_encode($body),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 5, // A purge must never hold up an admin save
         ]);
 
         $response = \curl_exec($ch);

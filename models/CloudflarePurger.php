@@ -6,34 +6,27 @@ namespace Osmium\Services\Cloudflare\Models;
 
 /**
  * The one place that purges. purge() and purgeSite() are for other code and the content.changed hook: they do
- * nothing when the service is not configured, and rapid calls are merged (Cloudflare's free plan allows about
- * 5 purge requests a minute). The first call goes straight out; calls inside the cooldown wait, and one purge
- * covering all of them is sent when the cooldown ends, after the visitor's response has finished.
+ * nothing when the service is not configured, and they never wait. Cloudflare's free plan allows about 5 purge
+ * requests a minute, so at most MAX_PER_MINUTE go out; anything over that is held and sent, merged into one purge,
+ * by the next call or when the Cloudflare admin page loads (flushPending).
  * The send*() methods are for buttons and scripts: immediate, with Cloudflare's answer.
  */
 class CloudflarePurger
 {
-    public const COOLDOWN_SECONDS = 15;
+    public const MAX_PER_MINUTE = 4;
+    private const WINDOW_SECONDS = 60;
     private const STATE_PATH = 'app/cache/osmium-cloudflare-state.json';
 
     /** @var callable */
     private $clock;
-    /** @var callable */
-    private $sleeper;
-    /** @var callable */
-    private $defer;
 
     public function __construct(
         private readonly CloudflareConfig $config,
         private readonly CloudflareClient $client,
         private readonly string $statePath = self::STATE_PATH,
         ?callable $clock = null,
-        ?callable $sleeper = null,
-        ?callable $defer = null,
     ) {
         $this->clock = $clock ?? 'time';
-        $this->sleeper = $sleeper ?? 'sleep';
-        $this->defer = $defer ?? [self::class, 'afterResponse'];
     }
 
     public static function fromSiteConfig(): self
@@ -56,39 +49,36 @@ class CloudflarePurger
         return self::fromSiteConfig()->queue(urls: [], wholeSite: true);
     }
 
-    /** @param string[] $urls @return bool true when sent or queued, false when nothing was done */
+    /** @param string[] $urls @return bool true when sent or held for the next call, false when nothing was done */
     public function queue(array $urls, bool $wholeSite): bool
     {
         $nothingToDo = !$this->config->isConfigured() || (!$wholeSite && $urls === []);
         if ($nothingToDo) return false;
 
         $state = $this->readState();
-        $now = (int) ($this->clock)();
-        $coolingDown = $now - $state['last'] < self::COOLDOWN_SECONDS;
-        if (!$coolingDown && !$state['pending']) return $this->sendNow($urls, $wholeSite, $now);
-
-        $alreadyWaiting = $state['pending'];
-        $state['pending'] = true;
         $state['site'] = $state['site'] || $wholeSite;
         $state['urls'] = \array_values(\array_unique(\array_merge($state['urls'], $urls)));
-        $this->writeState($state);
-        if (!$alreadyWaiting) ($this->defer)(fn() => $this->flush());
+        $state['pending'] = true;
+
+        $this->sendIfAllowed($state);
 
         return true;
     }
 
-    /** Waits out the cooldown, then sends everything that was queued as one purge */
-    public function flush(): void
+    /** Sends what was held back, if the rate limit allows. Cheap when nothing is held. */
+    public function flushPending(): void
     {
         $state = $this->readState();
-        $wait = $state['last'] + self::COOLDOWN_SECONDS - (int) ($this->clock)();
-        if ($wait > 0) ($this->sleeper)($wait);
+        $nothingHeld = !$state['pending'];
+        if ($nothingHeld) return;
 
-        $state = $this->readState();
-        $nothingQueued = !$state['pending'];
-        if ($nothingQueued) return;
+        $this->sendIfAllowed($state);
+    }
 
-        $this->sendNow($state['urls'], $state['site'], (int) ($this->clock)());
+    /** @return bool true when anything is being held back */
+    public function hasPending(): bool
+    {
+        return $this->readState()['pending'];
     }
 
     /** @return array{ok: bool, error: string} */
@@ -109,28 +99,38 @@ class CloudflarePurger
         return $this->recorded($this->client->purgeFiles($urls));
     }
 
-    /** @param string[] $urls */
-    private function sendNow(array $urls, bool $wholeSite, int $now): bool
+    /** @param array{sent: int[], pending: bool, site: bool, urls: string[]} $state */
+    private function sendIfAllowed(array $state): void
     {
-        $result = $wholeSite ? $this->client->purgeHostnames($this->config->hostnames) : $this->client->purgeFiles($urls);
-        $this->writeState(['last' => $now, 'pending' => false, 'site' => false, 'urls' => []]);
+        $now = (int) ($this->clock)();
+        $state['sent'] = \array_values(\array_filter($state['sent'], fn(int $at): bool => $now - $at < self::WINDOW_SECONDS));
+        $overBudget = \count($state['sent']) >= self::MAX_PER_MINUTE;
+        if ($overBudget) {
+            $this->writeState($state);
+            return;
+        }
+
+        $result = $state['site'] ? $this->client->purgeHostnames($this->config->hostnames) : $this->client->purgeFiles($state['urls']);
         if (!$result['ok']) \error_log('Cloudflare purge failed: ' . $result['error']);
 
-        return $result['ok'];
+        $state['sent'][] = $now;
+        $this->writeState(['sent' => $state['sent'], 'pending' => false, 'site' => false, 'urls' => []]);
     }
 
     /** @param array{ok: bool, error: string} $result @return array{ok: bool, error: string} */
     private function recorded(array $result): array
     {
-        $this->writeState(['last' => (int) ($this->clock)(), 'pending' => false, 'site' => false, 'urls' => []]);
+        $state = $this->readState();
+        $state['sent'][] = (int) ($this->clock)();
+        $this->writeState($state);
 
         return $result;
     }
 
-    /** @return array{last: int, pending: bool, site: bool, urls: string[]} */
+    /** @return array{sent: int[], pending: bool, site: bool, urls: string[]} */
     private function readState(): array
     {
-        $empty = ['last' => 0, 'pending' => false, 'site' => false, 'urls' => []];
+        $empty = ['sent' => [], 'pending' => false, 'site' => false, 'urls' => []];
         $exists = \is_file($this->statePath);
         if (!$exists) return $empty;
 
@@ -148,19 +148,5 @@ class CloudflarePurger
         if (!$directoryExists) \mkdir(directory: $directory, permissions: 0755, recursive: true);
 
         \file_put_contents($this->statePath, \json_encode($state), LOCK_EX);
-    }
-
-    /** Runs $task once the response has gone to the visitor, so a save never waits for the cooldown */
-    public static function afterResponse(callable $task): void
-    {
-        \register_shutdown_function(function () use ($task): void {
-            $canFinish = \function_exists('fastcgi_finish_request');
-            if ($canFinish) \fastcgi_finish_request();
-            try {
-                $task();
-            } catch (\Throwable $e) {
-                \error_log('Cloudflare purge failed: ' . $e->getMessage());
-            }
-        });
     }
 }

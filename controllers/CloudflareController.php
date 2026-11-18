@@ -25,6 +25,7 @@ class CloudflareController extends AdminController
         if ($isPost) $this->handlePost();
 
         $config = CloudflareConfig::load();
+        if ($config->isConfigured()) CloudflarePurger::fromSiteConfig()->flushPending();
         $this->data['admin']['cloudflare'] = [
             'enabled' => $config->enabled,
             'hasToken' => $config->apiToken !== '',

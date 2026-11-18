@@ -28,7 +28,7 @@
                             <input class="form-check-input" type="checkbox" id="enabled" name="enabled" <?= $cf['enabled'] ? 'checked' : '' ?>>
                             <label class="form-check-label fw-semibold" for="enabled">Enabled</label>
                         </div>
-                        <div class="form-text">When on, every change saved in the admin or by an assistant clears the site's cache (at most once every 15 seconds).</div>
+                        <div class="form-text">When on, every change saved in the admin or by an assistant clears the site's cache (at most 4 times a minute: Cloudflare's free plan allows about 5).</div>
                     </div>
                     <div class="mb-3">
                         <label for="api_token" class="form-label fw-semibold">API token</label>

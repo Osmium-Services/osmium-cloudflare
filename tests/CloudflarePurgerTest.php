@@ -21,15 +21,12 @@ final class CloudflarePurgerTest extends TestCase
     /** @var array<int, array{string, string, ?array<string, mixed>}> */
     private array $calls = [];
     private int $now = 1000;
-    /** @var callable[] */
-    private array $deferred = [];
     private string $state;
 
     protected function setUp(): void
     {
         $this->state = \sys_get_temp_dir() . '/cf-state-' . \uniqid() . '.json';
         $this->calls = [];
-        $this->deferred = [];
     }
 
     protected function tearDown(): void
@@ -55,8 +52,6 @@ final class CloudflarePurgerTest extends TestCase
             client: new CloudflareClient(apiToken: 'tok', zoneId: 'zone1', transport: $transport),
             statePath: $this->state,
             clock: fn(): int => $this->now,
-            sleeper: function (int $seconds): void { $this->now += $seconds; },
-            defer: function (callable $task): void { $this->deferred[] = $task; },
         );
     }
 
@@ -80,48 +75,49 @@ final class CloudflarePurgerTest extends TestCase
         $this->assertSame(['hosts' => ['www.example.com', 'staging.example.com']], $this->calls[0][2]);
     }
 
-    public function testRapidSavesMergeIntoOneLaterPurge(): void
+    public function testSavesNeverWaitAndStopAtTheMinuteBudget(): void
     {
         $purger = $this->purger();
-        $purger->queue([], wholeSite: true);
-        $this->now += 3;
-        $purger->queue([], wholeSite: true);
-        $purger->queue([], wholeSite: true);
+        for ($i = 0; $i < 6; $i++) {
+            $this->assertTrue($purger->queue([], wholeSite: true));
+            $this->now += 1;
+        }
 
-        $this->assertCount(1, $this->calls);
-        $this->assertCount(1, $this->deferred);
-
-        ($this->deferred[0])();
-        $this->assertCount(2, $this->calls);
-        $this->assertSame(1015, $this->now);
+        $this->assertCount(CloudflarePurger::MAX_PER_MINUTE, $this->calls);
+        $this->assertTrue($purger->hasPending());
     }
 
-    public function testFlushWithNothingQueuedSendsNothing(): void
+    public function testHeldPurgeIsSentAsOneOnceTheWindowHasPassed(): void
     {
-        $this->purger()->flush();
+        $purger = $this->purger();
+        for ($i = 0; $i < 6; $i++) $purger->queue([], wholeSite: true);
+        $this->assertCount(4, $this->calls);
+
+        $purger->flushPending();
+        $this->assertCount(4, $this->calls);
+
+        $this->now += 61;
+        $purger->flushPending();
+        $this->assertCount(5, $this->calls);
+        $this->assertFalse($purger->hasPending());
+    }
+
+    public function testFlushWithNothingHeldSendsNothing(): void
+    {
+        $this->purger()->flushPending();
         $this->assertSame([], $this->calls);
     }
 
-    public function testQueuedUrlsAreMergedAndSentAsFiles(): void
+    public function testHeldUrlsAreMergedAndSentAsFiles(): void
     {
         $purger = $this->purger();
+        for ($i = 0; $i < 4; $i++) $purger->queue([], wholeSite: true);
         $purger->queue(['https://www.example.com/a.png'], wholeSite: false);
-        $purger->queue(['https://www.example.com/b.png'], wholeSite: false);
-        $purger->queue(['https://www.example.com/b.png'], wholeSite: false);
-        ($this->deferred[0])();
+        $purger->queue(['https://www.example.com/b.png', 'https://www.example.com/a.png'], wholeSite: false);
 
-        $this->assertSame(['files' => ['https://www.example.com/b.png']], $this->calls[1][2]);
-    }
-
-    public function testPurgeAfterCooldownGoesStraightOut(): void
-    {
-        $purger = $this->purger();
-        $purger->queue([], wholeSite: true);
-        $this->now += CloudflarePurger::COOLDOWN_SECONDS;
-        $purger->queue([], wholeSite: true);
-
-        $this->assertCount(2, $this->calls);
-        $this->assertSame([], $this->deferred);
+        $this->now += 61;
+        $purger->flushPending();
+        $this->assertSame(['files' => ['https://www.example.com/a.png', 'https://www.example.com/b.png']], $this->calls[4][2]);
     }
 
     public function testManyUrlsAreSplitIntoRequestsOf30(): void
