@@ -7,6 +7,7 @@ namespace Osmium\Services\Cloudflare\Controllers;
 use Osmium\Modules\Admin\Core\AdminController;
 use Osmium\Services\Cloudflare\Models\CloudflareClient;
 use Osmium\Services\Cloudflare\Models\CloudflareConfig;
+use Osmium\Services\Cloudflare\Models\CloudflareDevMode;
 use Osmium\Services\Cloudflare\Models\CloudflarePurger;
 
 /**
@@ -90,6 +91,8 @@ class CloudflareController extends AdminController
             'dev-off' => $client->setDevelopmentMode(false),
         };
 
+        $this->rememberDevelopmentMode($action, $result['ok']);
+
         $description = $this->describe($action);
         if ($result['ok'] && $action !== 'test') {
             $this->admin->model->changelog->log(description: 'Cloudflare: ' . $description, recordType: 'settings');
@@ -138,8 +141,26 @@ class CloudflareController extends AdminController
         $client = new CloudflareClient(apiToken: $config->apiToken, zoneId: $config->zoneId);
         $zone = $client->zone();
         $dev = $client->developmentMode();
+        if ($dev['ok']) $this->syncDevelopmentMode($dev['on']);
 
         return $zone + ['devMode' => $dev['on']];
+    }
+
+    /** Keeps the navbar icon in step with what the button just did */
+    private function rememberDevelopmentMode(string $action, bool $succeeded): void
+    {
+        $changedIt = $succeeded && \in_array($action, ['dev-on', 'dev-off'], true);
+        if (!$changedIt) return;
+
+        $this->syncDevelopmentMode($action === 'dev-on');
+    }
+
+    /** Keeps the navbar icon in step with what Cloudflare says */
+    private function syncDevelopmentMode(bool $on): void
+    {
+        $devMode = new CloudflareDevMode();
+        if ($on) $devMode->markOn();
+        if (!$on) $devMode->markOff();
     }
 
     private function finish(bool $ok, string $text): void
