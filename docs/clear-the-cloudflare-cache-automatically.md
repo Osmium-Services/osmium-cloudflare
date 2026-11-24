@@ -1,6 +1,7 @@
 ---
 title: Clear the Cloudflare cache automatically
 tags: cloudflare, cache, purge, development mode, api token, zone id
+page: admin/settings/cloudflare
 ---
 
 If your site is behind Cloudflare, **Cloudflare** clears its cache for you, so visitors see your changes straight away.
