@@ -45,7 +45,7 @@ class CloudflareMcp
 
         $config = CloudflareConfig::load();
         $notConfigured = !$config->isConfigured();
-        if ($notConfigured) throw new McpToolException('Cloudflare is not set up on this site. Add the token, zone ID and hostnames under Service Settings > Cloudflare and switch it on.');
+        if ($notConfigured) throw new McpToolException('Cloudflare is not set up on this site. Add the token, zone ID and hostnames under Services > Cloudflare and switch it on.');
 
         $purger = CloudflarePurger::fromSiteConfig();
         $result = match ($scope) {
